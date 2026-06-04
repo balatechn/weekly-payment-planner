@@ -105,14 +105,12 @@ export default function PaymentList() {
   const clearFilters = () => setFilters({ entityId: '', status: '', vendorName: '' });
   const hasFilters = filters.entityId || filters.status || filters.vendorName;
 
-  // Permission helpers
+  // Permission helpers — visible on all rows
   const canEdit = (p) =>
-    p.status === 'draft' &&
-    (user?.role !== 'department_user' || p.userId === user?.id);
+    user?.role !== 'department_user' || p.userId === user?.id;
 
   const canDelete = (p) =>
-    p.status === 'draft' &&
-    (user?.role !== 'department_user' || p.userId === user?.id);
+    user?.role !== 'department_user' || p.userId === user?.id;
 
   const isOverdue = (p) =>
     new Date(p.dueDate) < new Date() && !['paid', 'rejected'].includes(p.status);
