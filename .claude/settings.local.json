@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(Start-Sleep -Seconds 8)",
+      "Bash(Get-Content \"C:\\\\Users\\\\Admin\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\D--Weekly-Planner\\\\1560a53f-6d7e-40ea-a290-490472fdbb58\\\\tasks\\\\b15bsmitc.output\" -ErrorAction SilentlyContinue)",
+      "PowerShell(psql --version 2>&1)",
+      "PowerShell(pg_isready 2>&1)",
+      "PowerShell($env:PATH += \";C:\\\\Program Files\\\\PostgreSQL\\\\16\\\\bin\"; psql --version)",
+      "Bash(pkill -f \"node index.js\")",
+      "Bash(pkill -f \"nodemon\")",
+      "Bash(pkill -f \"vite\")",
+      "Bash(sleep 8 && cat /tmp/devserver.log)",
+      "Bash(grep -E \"\\(✅|❌|Server running|EAUTH|crashed|5000|5173|5174\\)\" /tmp/devserver.log | tail -20)"
+    ]
+  }
+}
