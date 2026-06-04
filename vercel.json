@@ -1,7 +1,7 @@
 {
   "version": 2,
   "installCommand": "npm run install-all",
-  "buildCommand": "cd client && npm run build",
+  "buildCommand": "npm run build --prefix client",
   "outputDirectory": "client/dist",
   "functions": {
     "api/index.js": {
@@ -14,3 +14,4 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
+
