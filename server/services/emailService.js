@@ -21,6 +21,15 @@ const emailService = {
     payments.forEach((payment, index) => {
       totalAmount += parseFloat(payment.totalAmount);
       
+      const statusColors = {
+        submitted: '#F59E0B', under_review: '#3B82F6', approved: '#10B981'
+      };
+      const statusLabels = {
+        submitted: 'Submitted', under_review: 'Under Review', approved: 'Approved'
+      };
+      const statusColor = statusColors[payment.status] || '#6B7280';
+      const statusLabel = statusLabels[payment.status] || payment.status;
+
       tableRows += `
         <tr style="border-bottom: 1px solid #e5e7eb;">
           <td style="padding: 12px 8px; text-align: center;">${index + 1}</td>
@@ -31,6 +40,9 @@ const emailService = {
           <td style="padding: 12px 8px; text-align: right;">${formatCurrency(payment.totalAmount)}</td>
           <td style="padding: 12px 8px; text-align: center;">${formatDate(payment.dueDate)}</td>
           <td style="padding: 12px 8px;">${payment.paymentTerms}</td>
+          <td style="padding: 12px 8px; text-align: center;">
+            <span style="background:${statusColor}20;color:${statusColor};padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;">${statusLabel}</span>
+          </td>
           <td style="padding: 12px 8px;">${payment.remarks || '-'}</td>
         </tr>
       `;
@@ -94,6 +106,7 @@ const emailService = {
                 <th style="text-align: right;">Invoice Amount (Incl GST)</th>
                 <th style="text-align: center;">Due Date</th>
                 <th>Payment Terms</th>
+                <th style="text-align: center;">Status</th>
                 <th>Remarks</th>
               </tr>
             </thead>
@@ -134,23 +147,20 @@ const emailService = {
       const weekNumber = Math.ceil((((weekStartDate - onejan) / 86400000) + onejan.getDay() + 1) / 7);
       const weekYear = weekStartDate.getFullYear();
 
-      // Get approved payments for the week
+      // Get all pending payments (submitted, under_review, approved) — not yet paid or rejected
       const payments = await Payment.findAll({
         where: {
-          status: 'approved',
-          dueDate: {
-            [Op.between]: [weekStartDate, weekEndDate]
-          }
+          status: { [Op.in]: ['submitted', 'under_review', 'approved'] }
         },
         include: [
           { model: Entity, as: 'entity' }
         ],
-        order: [['entity.name', 'ASC'], ['dueDate', 'ASC']]
+        order: [['entity', 'name', 'ASC'], ['dueDate', 'ASC']]
       });
 
       if (payments.length === 0) {
-        console.log('No approved payments for this week');
-        return { success: true, message: 'No payments to send' };
+        console.log('No pending payments to send');
+        return { success: true, message: 'No pending payments to send' };
       }
 
       // Generate email HTML
@@ -178,7 +188,7 @@ const emailService = {
         return `${String(d.getDate()).padStart(2, '0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
       };
 
-      const subject = `Weekly Payment Requirement – ${formatDate(weekStartDate)} to ${formatDate(weekEndDate)}`;
+      const subject = `Weekly Pending Payment Schedule – ${formatDate(weekStartDate)} to ${formatDate(weekEndDate)}`;
 
       // Send email
       const info = await emailTransporter.sendMail({
