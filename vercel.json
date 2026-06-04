@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm run vercel-build",
+  "buildCommand": "vite build --config client/vite.config.js",
   "outputDirectory": "client/dist",
   "functions": {
     "api/index.js": {
@@ -13,5 +13,3 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
-
-
