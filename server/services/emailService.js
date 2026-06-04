@@ -108,7 +108,7 @@ const emailService = {
           </table>
 
           <div class="footer">
-            <p>Regards,<br>${process.env.EMAIL_FROM_NAME || 'Weekly Payment Planner'}<br>${process.env.EMAIL_FROM || ''}</p>
+            <p>Regards,<br>${process.env.EMAIL_FROM_NAME || 'IT Team'}<br>National Group India</p>
           </div>
         </body>
       </html>
