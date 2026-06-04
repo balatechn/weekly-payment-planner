@@ -76,31 +76,33 @@ export default function PaymentForm() {
     setFile(e.target.files[0]);
   };
 
+  // Convert file to base64 so we can send as JSON (avoids multipart issues on Vercel)
+  const fileToBase64 = (f) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result); // data:mime;base64,...
+      reader.onerror = reject;
+      reader.readAsDataURL(f);
+    });
+
   const handleSubmit = async (e, saveAsDraft = false) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      const data = new FormData();
-      
-      Object.entries(formData).forEach(([key, value]) => {
-        data.append(key, value);
-      });
+      const payload = { ...formData };
 
       if (file) {
-        data.append('attachment', file);
+        payload.attachmentBase64 = await fileToBase64(file);
+        payload.attachmentName = file.name;
       }
 
       if (isEdit) {
-        await api.put(`/payments/${id}`, data, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await api.put(`/payments/${id}`, payload);
         toast.success('Payment updated successfully');
       } else {
-        const response = await api.post('/payments', data, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        
+        const response = await api.post('/payments', payload);
+
         if (!saveAsDraft) {
           await api.post(`/payments/${response.data.id}/submit`);
           toast.success('Payment request submitted successfully');

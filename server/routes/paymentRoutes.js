@@ -2,15 +2,13 @@ const express = require('express');
 const router = express.Router();
 const paymentController = require('../controllers/paymentController');
 const { authMiddleware, roleMiddleware } = require('../middleware/authMiddleware');
-const upload = require('../middleware/uploadMiddleware');
 const auditMiddleware = require('../middleware/auditMiddleware');
 
 // All routes require authentication
 router.use(authMiddleware);
 
 // Create payment
-router.post('/', 
-  upload.single('attachment'),
+router.post('/',
   auditMiddleware('CREATE', 'payment'),
   paymentController.create
 );
@@ -22,8 +20,7 @@ router.get('/', paymentController.getAll);
 router.get('/:id', paymentController.getById);
 
 // Update payment
-router.put('/:id', 
-  upload.single('attachment'),
+router.put('/:id',
   auditMiddleware('UPDATE', 'payment'),
   paymentController.update
 );

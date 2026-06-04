@@ -9,14 +9,18 @@ const uploadDir = process.env.VERCEL
   ? '/tmp/uploads'
   : path.join(__dirname, '../uploads');
 
-// Save file buffer from memoryStorage to disk, return the filename
-const saveFileToDisk = async (file) => {
+// Save base64 data URL to disk, return the filename
+const saveBase64ToDisk = async (base64DataUrl, originalName) => {
   if (!fsSync.existsSync(uploadDir)) {
     fsSync.mkdirSync(uploadDir, { recursive: true });
   }
+  const matches = base64DataUrl.match(/^data:(.+);base64,(.+)$/);
+  if (!matches) throw new Error('Invalid base64 file');
+  const buffer = Buffer.from(matches[2], 'base64');
+  const ext = path.extname(originalName) || '.bin';
   const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-  const filename = file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname);
-  await fs.writeFile(path.join(uploadDir, filename), file.buffer);
+  const filename = 'attachment-' + uniqueSuffix + ext;
+  await fs.writeFile(path.join(uploadDir, filename), buffer);
   return filename;
 };
 
@@ -25,8 +29,8 @@ const paymentController = {
   create: async (req, res) => {
     try {
       let attachmentFilename = null;
-      if (req.file) {
-        attachmentFilename = await saveFileToDisk(req.file);
+      if (req.body.attachmentBase64 && req.body.attachmentName) {
+        attachmentFilename = await saveBase64ToDisk(req.body.attachmentBase64, req.body.attachmentName);
       }
 
       const paymentData = {
@@ -167,8 +171,8 @@ const paymentController = {
                      parseFloat(req.body.gstAmount || payment.gstAmount || 0)
       };
 
-      if (req.file) {
-        updateData.attachment = await saveFileToDisk(req.file);
+      if (req.body.attachmentBase64 && req.body.attachmentName) {
+        updateData.attachment = await saveBase64ToDisk(req.body.attachmentBase64, req.body.attachmentName);
         // Attempt to delete old file (best-effort)
         if (payment.attachment) {
           try {
