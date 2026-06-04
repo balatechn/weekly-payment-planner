@@ -1,45 +1,25 @@
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
-
-// Use /tmp on Vercel (ephemeral), local uploads dir otherwise
-const uploadDir = process.env.VERCEL
-  ? '/tmp/uploads'
-  : path.join(__dirname, '../uploads');
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Configure storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
 
 // File filter
 const fileFilter = (req, file, cb) => {
   const allowedTypes = /pdf|jpg|jpeg|png|xls|xlsx/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+  const mimetype = /pdf|jpeg|png|excel|spreadsheet|octet-stream/.test(file.mimetype);
 
-  if (mimetype && extname) {
+  if (extname) {
     return cb(null, true);
   } else {
     cb(new Error('Only PDF, JPG, PNG, and Excel files are allowed'));
   }
 };
 
-// Configure multer
+// Always use memoryStorage — works on both local and Vercel serverless
+// (Vercel buffers request bodies before the function runs, breaking stream-based disk storage)
 const upload = multer({
-  storage: storage,
+  storage: multer.memoryStorage(),
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024 // 5MB default
+    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024
   },
   fileFilter: fileFilter
 });
