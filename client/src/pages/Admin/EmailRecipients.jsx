@@ -75,14 +75,6 @@ function AddModal({ onClose, onSaved }) {
             />
           </div>
 
-          {/* Mailgun sandbox warning */}
-          <div className="flex gap-2.5 p-3.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-xl">
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-amber-700 dark:text-amber-400">
-              <strong>Mailgun Sandbox:</strong> Emails can only be sent to addresses authorized in your Mailgun dashboard. Add the recipient there too.
-            </p>
-          </div>
-
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="btn btn-secondary flex-1">Cancel</button>
             <button type="submit" disabled={loading} className="btn btn-primary flex-1">
@@ -266,7 +258,7 @@ export default function EmailRecipients() {
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">SMTP</p>
               <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Mailgun Connected</p>
-              <p className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70">smtp.mailgun.org : 587</p>
+              <p className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70">smtp.gmail.com : 587</p>
             </div>
           </div>
           {[
@@ -278,16 +270,6 @@ export default function EmailRecipients() {
               <p className={`text-2xl font-bold ${color}`}>{value}</p>
             </div>
           ))}
-        </div>
-
-        {/* Mailgun sandbox notice */}
-        <div className="flex gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl">
-          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-          <div className="text-sm text-amber-700 dark:text-amber-400">
-            <strong>Mailgun Sandbox Mode:</strong> You are on a sandbox domain. Emails can only be delivered to addresses you authorize in your{' '}
-            <strong>Mailgun dashboard → Sending → Authorized Recipients</strong>.
-            Upgrade to a custom Mailgun domain to send to any address.
-          </div>
         </div>
 
         {/* Recipients table */}
