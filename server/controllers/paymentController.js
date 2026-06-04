@@ -209,11 +209,13 @@ const paymentController = {
         return res.status(404).json({ error: 'Payment not found' });
       }
 
+      // Department users can only delete their own payments
       if (req.user.role === 'department_user' && payment.userId !== req.user.id) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
-      if (payment.status !== 'draft') {
+      // Department users can only delete drafts; admin/finance can delete any status
+      if (req.user.role === 'department_user' && payment.status !== 'draft') {
         return res.status(403).json({ error: 'Can only delete draft payments' });
       }
 
