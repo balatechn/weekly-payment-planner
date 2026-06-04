@@ -229,6 +229,54 @@ const paymentController = {
     }
   },
 
+  // Mark payment as paid (finance / admin only)
+  markAsPaid: async (req, res) => {
+    try {
+      const payment = await Payment.findByPk(req.params.id);
+
+      if (!payment) {
+        return res.status(404).json({ error: 'Payment not found' });
+      }
+
+      if (payment.status !== 'approved') {
+        return res.status(400).json({ error: 'Only approved payments can be marked as paid' });
+      }
+
+      const { paidDate, utrReference, paymentMode, paidRemarks } = req.body;
+
+      if (!paidDate) {
+        return res.status(400).json({ error: 'Payment date is required' });
+      }
+
+      // Store payment confirmation details in a structured format
+      const paymentInfo = JSON.stringify({
+        paidDate,
+        utrReference: utrReference || null,
+        paymentMode: paymentMode || null,
+        paidRemarks: paidRemarks || null,
+        markedBy: req.user.name,
+        markedAt: new Date().toISOString(),
+      });
+
+      await payment.update({
+        status: 'paid',
+        rejectionReason: paymentInfo,   // re-use this column for payment confirmation metadata
+      });
+
+      const updated = await Payment.findByPk(payment.id, {
+        include: [
+          { model: Entity, as: 'entity' },
+          { model: User, as: 'user', attributes: ['id', 'name', 'email'] },
+        ],
+      });
+
+      res.json({ message: 'Payment marked as paid successfully', payment: updated });
+    } catch (error) {
+      console.error('Mark as paid error:', error);
+      res.status(500).json({ error: 'Failed to mark payment as paid' });
+    }
+  },
+
   // Submit payment for approval
   submit: async (req, res) => {
     try {

@@ -37,4 +37,11 @@ router.post('/:id/submit',
   paymentController.submit
 );
 
+// Mark payment as paid (finance and admin only)
+router.post('/:id/mark-paid',
+  roleMiddleware('admin', 'finance'),
+  auditMiddleware('MARK_PAID', 'payment'),
+  paymentController.markAsPaid
+);
+
 module.exports = router;
