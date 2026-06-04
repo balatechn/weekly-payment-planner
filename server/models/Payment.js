@@ -81,6 +81,10 @@ module.exports = (sequelize, DataTypes) => {
     rejectionReason: {
       type: DataTypes.TEXT,
       allowNull: true
+    },
+    attachmentData: {
+      type: DataTypes.TEXT,  // stores base64 of the uploaded invoice file
+      allowNull: true
     }
   }, {
     timestamps: true,

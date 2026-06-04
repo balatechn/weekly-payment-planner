@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
+const emailService = require('../services/emailService');
 
 // Resolve upload directory — /tmp on Vercel, local uploads otherwise
 const uploadDir = process.env.VERCEL
@@ -37,6 +38,8 @@ const paymentController = {
         ...req.body,
         userId: req.user.id,
         attachment: attachmentFilename,
+        // Store base64 so we can attach it to notification email on submit
+        attachmentData: req.body.attachmentBase64 || null,
         totalAmount: parseFloat(req.body.invoiceAmount) + parseFloat(req.body.gstAmount || 0)
       };
 
@@ -295,6 +298,19 @@ const paymentController = {
       }
 
       await payment.update({ status: 'submitted' });
+
+      // Load full payment details for email
+      const paymentWithDetails = await Payment.findByPk(payment.id, {
+        include: [
+          { model: Entity, as: 'entity' },
+          { model: User, as: 'user', attributes: ['id', 'name', 'email'] }
+        ]
+      });
+
+      // Send notification email (non-blocking — payment submission succeeds even if email fails)
+      emailService.sendPaymentNotification(paymentWithDetails).catch(err =>
+        console.error('Payment notification email failed:', err.message)
+      );
 
       res.json({ message: 'Payment submitted successfully', payment });
     } catch (error) {

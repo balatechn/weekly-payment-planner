@@ -294,6 +294,158 @@ const emailService = {
 
       throw error;
     }
+  },
+
+  // Send individual payment submission notification (with invoice attachment)
+  sendPaymentNotification: async (payment) => {
+    try {
+      const recipients = await EmailRecipient.findAll({ where: { isActive: true } });
+      if (recipients.length === 0) {
+        console.log('No active recipients — skipping payment notification');
+        return;
+      }
+
+      const recipientEmails = recipients.map(r => r.email).join(',');
+
+      const formatDate = (date) => {
+        const d = new Date(date);
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]} ${d.getFullYear()}`;
+      };
+      const formatCurrency = (n) => `₹${parseFloat(n || 0).toLocaleString('en-IN')}`;
+
+      const subject = `New Payment Request – ${payment.vendorName} – ${formatCurrency(payment.totalAmount)}`;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="UTF-8">
+        <style>
+          body { font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #1E3A8A, #2563EB); color: white; padding: 24px; border-radius: 12px 12px 0 0; }
+          .header h2 { margin: 0; font-size: 20px; }
+          .header p { margin: 6px 0 0; opacity: 0.8; font-size: 13px; }
+          .body { background: #f8fafc; border: 1px solid #e2e8f0; border-top: none; padding: 24px; border-radius: 0 0 12px 12px; }
+          .field { display: flex; margin-bottom: 12px; }
+          .label { width: 160px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; padding-top: 2px; }
+          .value { flex: 1; font-size: 14px; font-weight: 500; color: #1e293b; }
+          .amount-box { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+          .total { font-size: 22px; font-weight: 700; color: #1E3A8A; }
+          .badge { display: inline-block; background: #FEF3C7; color: #D97706; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+          .footer { margin-top: 20px; font-size: 12px; color: #94a3b8; }
+        </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>📋 New Payment Request Submitted</h2>
+            <p>Requires your attention and approval</p>
+          </div>
+          <div class="body">
+            <div class="field">
+              <div class="label">Submitted By</div>
+              <div class="value">${payment.user?.name} (${payment.user?.email})</div>
+            </div>
+            <div class="field">
+              <div class="label">Entity</div>
+              <div class="value">${payment.entity?.name}</div>
+            </div>
+            <div class="field">
+              <div class="label">Vendor / Payee</div>
+              <div class="value">${payment.vendorName}</div>
+            </div>
+            <div class="field">
+              <div class="label">Nature of Expense</div>
+              <div class="value">${payment.natureOfExpense}</div>
+            </div>
+            <div class="field">
+              <div class="label">Invoice No & Date</div>
+              <div class="value">${payment.invoiceNumber} &nbsp;|&nbsp; ${formatDate(payment.invoiceDate)}</div>
+            </div>
+            <div class="field">
+              <div class="label">Due Date</div>
+              <div class="value">${formatDate(payment.dueDate)}</div>
+            </div>
+            <div class="field">
+              <div class="label">Payment Terms</div>
+              <div class="value">${payment.paymentTerms}</div>
+            </div>
+            ${payment.remarks ? `<div class="field"><div class="label">Remarks</div><div class="value">${payment.remarks}</div></div>` : ''}
+
+            <div class="amount-box">
+              <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+                <span style="font-size:13px;color:#64748b;">Invoice Amount</span>
+                <span style="font-size:13px;">${formatCurrency(payment.invoiceAmount)}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+                <span style="font-size:13px;color:#64748b;">GST Amount</span>
+                <span style="font-size:13px;">${formatCurrency(payment.gstAmount)}</span>
+              </div>
+              <div style="border-top:1px solid #e2e8f0;padding-top:10px;display:flex;justify-content:space-between;">
+                <span style="font-weight:600;color:#1e293b;">Total Amount</span>
+                <span class="total">${formatCurrency(payment.totalAmount)}</span>
+              </div>
+            </div>
+
+            <div style="text-align:center;">
+              <span class="badge">⏳ Pending Approval</span>
+              ${payment.attachment ? '<p style="margin-top:12px;font-size:12px;color:#64748b;">📎 Invoice attached to this email</p>' : ''}
+            </div>
+          </div>
+          <div class="footer">
+            <p>This is an automated notification from Weekly Payment Planner. Please log in to approve or review this request.</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const mailOptions = {
+        from: `"${process.env.EMAIL_FROM_NAME || 'Weekly Payment Planner'}" <${process.env.EMAIL_FROM}>`,
+        to: recipientEmails,
+        subject,
+        html,
+      };
+
+      // Attach invoice file if available (stored as base64 in payment.attachmentData)
+      if (payment.attachmentData && payment.attachment) {
+        const matches = payment.attachmentData.match(/^data:(.+);base64,(.+)$/);
+        if (matches) {
+          mailOptions.attachments = [{
+            filename: payment.attachment,
+            content: Buffer.from(matches[2], 'base64'),
+            contentType: matches[1],
+          }];
+        }
+      }
+
+      const info = await emailTransporter.sendMail(mailOptions);
+
+      await EmailLog.create({
+        subject,
+        recipients: recipientEmails,
+        body: html,
+        totalAmount: payment.totalAmount,
+        paymentCount: 1,
+        status: 'sent',
+        sentAt: new Date(),
+      });
+
+      console.log(`✅ Payment notification sent: ${payment.vendorName} → ${recipientEmails}`);
+    } catch (error) {
+      console.error('sendPaymentNotification error:', error.message);
+
+      try {
+        await EmailLog.create({
+          subject: `Payment Notification – ${payment.vendorName}`,
+          recipients: '',
+          body: '',
+          status: 'failed',
+          error: error.message,
+          sentAt: new Date(),
+        });
+      } catch (_) {}
+
+      throw error;
+    }
   }
 };
 
