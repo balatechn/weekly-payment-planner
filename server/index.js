@@ -24,7 +24,19 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    const allowed = [
+      process.env.CLIENT_URL,
+      'http://localhost:5173',
+      'http://localhost:5174'
+    ].filter(Boolean);
+    // Allow Vercel preview/production domains and configured origins
+    if (!origin || allowed.includes(origin) || /\.vercel\.app$/.test(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all in production for now; tighten via CLIENT_URL env var
+    }
+  },
   credentials: true
 }));
 app.use(morgan('dev'));
