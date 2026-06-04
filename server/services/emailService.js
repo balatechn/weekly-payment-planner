@@ -155,7 +155,7 @@ const emailService = {
         include: [
           { model: Entity, as: 'entity' }
         ],
-        order: [['entity', 'name', 'ASC'], ['dueDate', 'ASC']]
+        order: [['dueDate', 'ASC']]
       });
 
       if (payments.length === 0) {
