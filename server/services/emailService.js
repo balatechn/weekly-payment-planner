@@ -21,15 +21,6 @@ const emailService = {
     payments.forEach((payment, index) => {
       totalAmount += parseFloat(payment.totalAmount);
       
-      const statusColors = {
-        submitted: '#F59E0B', under_review: '#3B82F6', approved: '#10B981'
-      };
-      const statusLabels = {
-        submitted: 'Submitted', under_review: 'Under Review', approved: 'Approved'
-      };
-      const statusColor = statusColors[payment.status] || '#6B7280';
-      const statusLabel = statusLabels[payment.status] || payment.status;
-
       tableRows += `
         <tr style="border-bottom: 1px solid #e5e7eb;">
           <td style="padding: 12px 8px; text-align: center;">${index + 1}</td>
@@ -40,9 +31,6 @@ const emailService = {
           <td style="padding: 12px 8px; text-align: right;">${formatCurrency(payment.totalAmount)}</td>
           <td style="padding: 12px 8px; text-align: center;">${formatDate(payment.dueDate)}</td>
           <td style="padding: 12px 8px;">${payment.paymentTerms}</td>
-          <td style="padding: 12px 8px; text-align: center;">
-            <span style="background:${statusColor}20;color:${statusColor};padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;">${statusLabel}</span>
-          </td>
           <td style="padding: 12px 8px;">${payment.remarks || '-'}</td>
         </tr>
       `;
@@ -106,7 +94,6 @@ const emailService = {
                 <th style="text-align: right;">Invoice Amount (Incl GST)</th>
                 <th style="text-align: center;">Due Date</th>
                 <th>Payment Terms</th>
-                <th style="text-align: center;">Status</th>
                 <th>Remarks</th>
               </tr>
             </thead>
@@ -115,13 +102,13 @@ const emailService = {
               <tr class="total-row">
                 <td colspan="5" style="padding: 12px 8px; text-align: right;"><strong>Total Amount:</strong></td>
                 <td style="padding: 12px 8px; text-align: right;"><strong>${formatCurrency(totalAmount)}</strong></td>
-                <td colspan="3"></td>
+                <td colspan="2"></td>
               </tr>
             </tbody>
           </table>
 
           <div class="footer">
-            <p>Regards,<br>Finance Team</p>
+            <p>Regards,<br>${process.env.EMAIL_FROM_NAME || 'Weekly Payment Planner'}<br>${process.env.EMAIL_FROM || ''}</p>
           </div>
         </body>
       </html>
