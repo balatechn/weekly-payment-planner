@@ -1,113 +1,38 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Send, Paperclip, ArrowLeft, CheckCircle, SkipForward } from 'lucide-react';
+import {
+  ArrowLeft, Save, Send, Upload, X, FileText,
+  Building2, User, Hash, Calendar, IndianRupee,
+  CreditCard, MessageSquare, Paperclip, ChevronDown
+} from 'lucide-react';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
 
-const STEPS = [
-  {
-    field: 'entityId',
-    type: 'select',
-    question: "Which entity is this payment for?",
-  },
-  {
-    field: 'vendorName',
-    type: 'text',
-    question: "Who is the vendor or payee name?",
-    placeholder: 'e.g. ABC Contractors Pvt Ltd',
-  },
-  {
-    field: 'natureOfExpense',
-    type: 'text',
-    question: "What is the nature of this expense?",
-    placeholder: 'e.g. Civil Work – Tower B',
-  },
-  {
-    field: 'invoiceNumber',
-    type: 'text',
-    question: "What is the invoice number?",
-    placeholder: 'e.g. INV-245',
-  },
-  {
-    field: 'invoiceDate',
-    type: 'date',
-    question: "What is the invoice date?",
-  },
-  {
-    field: 'invoiceAmount',
-    type: 'number',
-    question: "What is the invoice amount (₹)?",
-    placeholder: 'e.g. 50000',
-  },
-  {
-    field: 'gstAmount',
-    type: 'number',
-    question: "What is the GST amount? (type 0 if none)",
-    placeholder: 'e.g. 9000',
-    optional: true,
-  },
-  {
-    field: 'dueDate',
-    type: 'date',
-    question: "When is the payment due?",
-  },
-  {
-    field: 'paymentTerms',
-    type: 'select',
-    question: "What are the payment terms?",
-    options: ['Advance', 'Part Payment', 'Final Invoice', 'Retention', 'Urgent'],
-  },
-  {
-    field: 'attachment',
-    type: 'file',
-    question: "Attach an invoice or document? (optional)",
-    optional: true,
-  },
-  {
-    field: 'remarks',
-    type: 'text',
-    question: "Any additional remarks? (optional)",
-    placeholder: 'Add notes or skip…',
-    optional: true,
-  },
-];
+const PAYMENT_TERMS = ['Advance', 'Part Payment', 'Final Invoice', 'Retention', 'Urgent'];
 
-function BotBubble({ text, animate }) {
-  return (
-    <div className={`flex items-end gap-2 ${animate ? 'animate-fade-in' : ''}`}>
-      <div className="w-8 h-8 rounded-full bg-primary-800 flex items-center justify-center text-white text-xs font-bold shrink-0">
-        WP
-      </div>
-      <div className="max-w-[75%] bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl rounded-bl-sm px-4 py-3 text-gray-800 dark:text-gray-100 text-sm shadow-sm">
-        {text}
-      </div>
-    </div>
-  );
-}
+const EMPTY_FORM = {
+  entityId: '',
+  vendorName: '',
+  natureOfExpense: '',
+  invoiceNumber: '',
+  invoiceDate: '',
+  invoiceAmount: '',
+  gstAmount: '',
+  dueDate: '',
+  paymentTerms: '',
+  remarks: '',
+};
 
-function UserBubble({ text }) {
+function FieldWrapper({ label, required, icon: Icon, error, children }) {
   return (
-    <div className="flex justify-end">
-      <div className="max-w-[75%] bg-primary-800 text-white rounded-2xl rounded-br-sm px-4 py-3 text-sm shadow-sm">
-        {text}
-      </div>
-    </div>
-  );
-}
-
-function TypingIndicator() {
-  return (
-    <div className="flex items-end gap-2">
-      <div className="w-8 h-8 rounded-full bg-primary-800 flex items-center justify-center text-white text-xs font-bold shrink-0">
-        WP
-      </div>
-      <div className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
-        <div className="flex gap-1 items-center h-4">
-          <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-          <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-          <span className="w-2 h-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }} />
-        </div>
-      </div>
+    <div>
+      <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">
+        {Icon && <Icon className="w-3.5 h-3.5" />}
+        {label}
+        {required && <span className="text-red-400 normal-case tracking-normal text-sm leading-none">*</span>}
+      </label>
+      {children}
+      {error && <p className="mt-1.5 text-xs text-red-500">{error}</p>}
     </div>
   );
 }
@@ -116,38 +41,23 @@ export default function PaymentForm() {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = !!id;
+  const fileRef = useRef(null);
 
   const [entities, setEntities] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [inputValue, setInputValue] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(isEdit);
+  const [form, setForm] = useState(EMPTY_FORM);
   const [file, setFile] = useState(null);
-  const [answers, setAnswers] = useState({});
-  const [typing, setTyping] = useState(false);
-  const [done, setDone] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [errors, setErrors] = useState({});
 
-  const bottomRef = useRef(null);
-  const inputRef = useRef(null);
-  const fileRef = useRef(null);
+  // Derived total
+  const total = (parseFloat(form.invoiceAmount) || 0) + (parseFloat(form.gstAmount) || 0);
 
   useEffect(() => {
     fetchEntities();
-  }, []);
-
-  useEffect(() => {
-    if (entities.length > 0 && messages.length === 0) {
-      askStep(0);
-    }
-  }, [entities]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, typing]);
-
-  useEffect(() => {
-    if (!typing && !done) inputRef.current?.focus();
-  }, [typing, currentStep]);
+    if (isEdit) fetchPayment();
+  }, [id]);
 
   const fetchEntities = async () => {
     try {
@@ -158,302 +68,397 @@ export default function PaymentForm() {
     }
   };
 
-  const addBot = (text) => {
-    setMessages(prev => [...prev, { role: 'bot', text }]);
-  };
-
-  const addUser = (text) => {
-    setMessages(prev => [...prev, { role: 'user', text }]);
-  };
-
-  const askStep = (stepIndex) => {
-    setTyping(true);
-    setTimeout(() => {
-      setTyping(false);
-      addBot(STEPS[stepIndex].question);
-      setCurrentStep(stepIndex);
-      setInputValue('');
-      setFile(null);
-    }, 600);
-  };
-
-  const displayValue = (field, value) => {
-    if (field === 'entityId') {
-      return entities.find(e => e.id === value)?.name || value;
-    }
-    if (field === 'invoiceAmount' || field === 'gstAmount') {
-      return `₹${parseFloat(value).toLocaleString('en-IN')}`;
-    }
-    if (field === 'attachment') return value?.name || 'File attached';
-    return value || '—';
-  };
-
-  const advance = (field, rawValue, displayText) => {
-    const newAnswers = { ...answers, [field]: rawValue };
-    setAnswers(newAnswers);
-    addUser(displayText);
-
-    const next = currentStep + 1;
-    if (next < STEPS.length) {
-      askStep(next);
-    } else {
-      // All steps done — show summary
-      setTyping(true);
-      setTimeout(() => {
-        setTyping(false);
-        const inv = parseFloat(newAnswers.invoiceAmount || 0);
-        const gst = parseFloat(newAnswers.gstAmount || 0);
-        const total = inv + gst;
-        addBot(
-          `Great! Here's a summary:\n\n` +
-          `🏢 Entity: ${entities.find(e => e.id === newAnswers.entityId)?.name}\n` +
-          `🏭 Vendor: ${newAnswers.vendorName}\n` +
-          `📋 Invoice: ${newAnswers.invoiceNumber} (${newAnswers.invoiceDate})\n` +
-          `💰 Total: ₹${total.toLocaleString('en-IN')} (incl. GST)\n` +
-          `📅 Due: ${newAnswers.dueDate} · ${newAnswers.paymentTerms}\n\n` +
-          `Ready to submit?`
-        );
-        setDone(true);
-      }, 700);
+  const fetchPayment = async () => {
+    try {
+      const res = await api.get(`/payments/${id}`);
+      const p = res.data;
+      setForm({
+        entityId:       p.entityId       || '',
+        vendorName:     p.vendorName      || '',
+        natureOfExpense:p.natureOfExpense || '',
+        invoiceNumber:  p.invoiceNumber   || '',
+        invoiceDate:    p.invoiceDate     || '',
+        invoiceAmount:  p.invoiceAmount   || '',
+        gstAmount:      p.gstAmount       || '',
+        dueDate:        p.dueDate         || '',
+        paymentTerms:   p.paymentTerms    || '',
+        remarks:        p.remarks         || '',
+      });
+    } catch {
+      toast.error('Failed to load payment');
+      navigate('/payments');
+    } finally {
+      setPageLoading(false);
     }
   };
 
-  const skip = () => {
-    const step = STEPS[currentStep];
-    if (!step.optional) return;
-    addUser('(skipped)');
-    const newAnswers = { ...answers, [step.field]: step.field === 'gstAmount' ? '0' : '' };
-    setAnswers(newAnswers);
-    const next = currentStep + 1;
-    if (next < STEPS.length) askStep(next);
+  const set = (field, value) => {
+    setForm(f => ({ ...f, [field]: value }));
+    if (errors[field]) setErrors(e => ({ ...e, [field]: '' }));
   };
 
-  const handleSend = () => {
-    const step = STEPS[currentStep];
-    if (step.type === 'file') {
-      if (file) {
-        advance(step.field, file, file.name);
-      } else if (step.optional) {
-        skip();
-      }
+  const validate = () => {
+    const e = {};
+    if (!form.entityId)        e.entityId        = 'Please select an entity';
+    if (!form.vendorName.trim()) e.vendorName     = 'Vendor name is required';
+    if (!form.natureOfExpense.trim()) e.natureOfExpense = 'Nature of expense is required';
+    if (!form.invoiceNumber.trim()) e.invoiceNumber = 'Invoice number is required';
+    if (!form.invoiceDate)     e.invoiceDate     = 'Invoice date is required';
+    if (!form.invoiceAmount || isNaN(parseFloat(form.invoiceAmount))) e.invoiceAmount = 'Valid amount required';
+    if (!form.dueDate)         e.dueDate         = 'Due date is required';
+    if (!form.paymentTerms)    e.paymentTerms    = 'Please select payment terms';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  // File handling
+  const handleFile = (f) => {
+    if (!f) return;
+    const allowed = /\.(pdf|jpg|jpeg|png|xls|xlsx)$/i;
+    if (!allowed.test(f.name)) {
+      toast.error('Only PDF, JPG, PNG, XLS files allowed');
       return;
     }
-
-    const val = inputValue.trim();
-    if (!val && !step.optional) return;
-    if (!val && step.optional) { skip(); return; }
-
-    advance(step.field, val, displayValue(step.field, val));
-  };
-
-  const handleSelect = (value) => {
-    const step = STEPS[currentStep];
-    advance(step.field, value, displayValue(step.field, value));
+    if (f.size > 5 * 1024 * 1024) {
+      toast.error('File must be under 5MB');
+      return;
+    }
+    setFile(f);
   };
 
   const fileToBase64 = (f) =>
     new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(f);
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(f);
     });
 
-  const submitPayment = async (asDraft = false) => {
-    setSubmitting(true);
+  const handleSubmit = async (asDraft = false) => {
+    if (!validate()) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setLoading(true);
     try {
-      const payload = {
-        entityId: answers.entityId,
-        vendorName: answers.vendorName,
-        natureOfExpense: answers.natureOfExpense,
-        invoiceNumber: answers.invoiceNumber,
-        invoiceDate: answers.invoiceDate,
-        invoiceAmount: answers.invoiceAmount,
-        gstAmount: answers.gstAmount || '0',
-        dueDate: answers.dueDate,
-        paymentTerms: answers.paymentTerms,
-        remarks: answers.remarks || '',
-      };
+      const payload = { ...form };
 
-      if (answers.attachment) {
-        payload.attachmentBase64 = await fileToBase64(answers.attachment);
-        payload.attachmentName = answers.attachment.name;
+      if (file) {
+        payload.attachmentBase64 = await fileToBase64(file);
+        payload.attachmentName   = file.name;
       }
 
-      const res = await api.post('/payments', payload);
-
-      if (!asDraft) {
-        await api.post(`/payments/${res.data.id}/submit`);
-        addBot('✅ Payment request submitted successfully! Redirecting…');
-        toast.success('Payment submitted for approval');
+      if (isEdit) {
+        await api.put(`/payments/${id}`, payload);
+        toast.success('Payment updated successfully');
+        navigate(`/payments/${id}`);
       } else {
-        addBot('✅ Saved as draft! Redirecting…');
-        toast.success('Payment saved as draft');
+        const res = await api.post('/payments', payload);
+        if (!asDraft) {
+          await api.post(`/payments/${res.data.id}/submit`);
+          toast.success('Payment submitted for approval');
+        } else {
+          toast.success('Payment saved as draft');
+        }
+        navigate('/payments');
       }
-
-      setTimeout(() => navigate('/payments'), 1500);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to save payment');
-      setSubmitting(false);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const step = STEPS[currentStep];
-  const progress = Math.round((currentStep / STEPS.length) * 100);
+  if (pageLoading) {
+    return (
+      <div className="space-y-4 animate-pulse max-w-4xl mx-auto">
+        <div className="skeleton h-10 w-64 rounded-xl" />
+        <div className="skeleton h-96 rounded-2xl" />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-        <button onClick={() => navigate('/payments')} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
-          <ArrowLeft className="w-5 h-5" />
+    <div className="max-w-4xl mx-auto space-y-5 animate-fade-in">
+
+      {/* Page header */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => navigate('/payments')}
+          className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+        >
+          <ArrowLeft className="w-5 h-5 text-slate-500" />
         </button>
-        <div className="flex-1">
-          <h1 className="font-semibold text-gray-900 dark:text-white">New Payment Request</h1>
-          {!done && (
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary-800 rounded-full transition-all duration-500"
-                  style={{ width: `${progress}%` }}
+        <div>
+          <h1 className="page-title">{isEdit ? 'Edit Payment Request' : 'New Payment Request'}</h1>
+          <p className="page-subtitle">Fill in the details below and submit for approval</p>
+        </div>
+      </div>
+
+      {/* Main form card */}
+      <div className="card space-y-6">
+
+        {/* ── Section: Basic Details ── */}
+        <div>
+          <h2 className="section-title mb-4 pb-3 border-b border-slate-100 dark:border-slate-700">
+            Payment Details
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+            {/* Entity */}
+            <FieldWrapper label="Entity" required icon={Building2} error={errors.entityId}>
+              <div className="relative">
+                <select
+                  value={form.entityId}
+                  onChange={e => set('entityId', e.target.value)}
+                  className={`input pr-10 appearance-none ${errors.entityId ? 'border-red-400 focus:ring-red-400' : ''}`}
+                >
+                  <option value="">Select entity…</option>
+                  {entities.map(e => (
+                    <option key={e.id} value={e.id}>{e.name}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            </FieldWrapper>
+
+            {/* Vendor */}
+            <FieldWrapper label="Vendor / Payee Name" required icon={User} error={errors.vendorName}>
+              <input
+                type="text"
+                value={form.vendorName}
+                onChange={e => set('vendorName', e.target.value)}
+                placeholder="e.g. ABC Contractors Pvt Ltd"
+                className={`input ${errors.vendorName ? 'border-red-400 focus:ring-red-400' : ''}`}
+              />
+            </FieldWrapper>
+
+            {/* Nature of Expense */}
+            <FieldWrapper label="Nature of Expense" required icon={FileText} error={errors.natureOfExpense}>
+              <input
+                type="text"
+                value={form.natureOfExpense}
+                onChange={e => set('natureOfExpense', e.target.value)}
+                placeholder="e.g. Civil Work – Tower B"
+                className={`input ${errors.natureOfExpense ? 'border-red-400 focus:ring-red-400' : ''}`}
+              />
+            </FieldWrapper>
+
+            {/* Invoice Number */}
+            <FieldWrapper label="Invoice Number" required icon={Hash} error={errors.invoiceNumber}>
+              <input
+                type="text"
+                value={form.invoiceNumber}
+                onChange={e => set('invoiceNumber', e.target.value)}
+                placeholder="e.g. INV-2024-001"
+                className={`input ${errors.invoiceNumber ? 'border-red-400 focus:ring-red-400' : ''}`}
+              />
+            </FieldWrapper>
+
+            {/* Invoice Date */}
+            <FieldWrapper label="Invoice Date" required icon={Calendar} error={errors.invoiceDate}>
+              <input
+                type="date"
+                value={form.invoiceDate}
+                onChange={e => set('invoiceDate', e.target.value)}
+                className={`input ${errors.invoiceDate ? 'border-red-400 focus:ring-red-400' : ''}`}
+              />
+            </FieldWrapper>
+
+            {/* Due Date */}
+            <FieldWrapper label="Due Date" required icon={Calendar} error={errors.dueDate}>
+              <input
+                type="date"
+                value={form.dueDate}
+                onChange={e => set('dueDate', e.target.value)}
+                className={`input ${errors.dueDate ? 'border-red-400 focus:ring-red-400' : ''}`}
+              />
+            </FieldWrapper>
+
+          </div>
+        </div>
+
+        {/* ── Section: Amount ── */}
+        <div>
+          <h2 className="section-title mb-4 pb-3 border-b border-slate-100 dark:border-slate-700">
+            Amount Details
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+            {/* Invoice Amount */}
+            <FieldWrapper label="Invoice Amount (₹)" required icon={IndianRupee} error={errors.invoiceAmount}>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.invoiceAmount}
+                onChange={e => set('invoiceAmount', e.target.value)}
+                placeholder="0.00"
+                className={`input ${errors.invoiceAmount ? 'border-red-400 focus:ring-red-400' : ''}`}
+              />
+            </FieldWrapper>
+
+            {/* GST Amount */}
+            <FieldWrapper label="GST Amount (₹)" icon={IndianRupee}>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.gstAmount}
+                onChange={e => set('gstAmount', e.target.value)}
+                placeholder="0.00"
+                className="input"
+              />
+            </FieldWrapper>
+
+            {/* Total (read-only) */}
+            <FieldWrapper label="Total Amount (Auto)">
+              <div className="input bg-slate-50 dark:bg-slate-900 cursor-not-allowed flex items-center gap-2">
+                <span className="text-slate-400">₹</span>
+                <span className="font-bold text-blue-600 dark:text-blue-400 text-base">
+                  {total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </FieldWrapper>
+
+          </div>
+        </div>
+
+        {/* ── Section: Terms & Attachment ── */}
+        <div>
+          <h2 className="section-title mb-4 pb-3 border-b border-slate-100 dark:border-slate-700">
+            Terms & Attachment
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+            {/* Payment Terms */}
+            <FieldWrapper label="Payment Terms" required icon={CreditCard} error={errors.paymentTerms}>
+              <div className="relative">
+                <select
+                  value={form.paymentTerms}
+                  onChange={e => set('paymentTerms', e.target.value)}
+                  className={`input pr-10 appearance-none ${errors.paymentTerms ? 'border-red-400 focus:ring-red-400' : ''}`}
+                >
+                  <option value="">Select payment terms…</option>
+                  {PAYMENT_TERMS.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+              </div>
+            </FieldWrapper>
+
+            {/* Attachment */}
+            <FieldWrapper label="Attachment" icon={Paperclip}>
+              <div
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]); }}
+                onClick={() => !file && fileRef.current?.click()}
+                className={`
+                  relative border-2 border-dashed rounded-xl px-4 py-3 cursor-pointer transition-all duration-200
+                  ${dragOver
+                    ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  }
+                `}
+              >
+                {file ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{file.name}</p>
+                      <p className="text-xs text-slate-400">{(file.size / 1024).toFixed(1)} KB</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); setFile(null); }}
+                      className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <Upload className="w-5 h-5 text-slate-400 shrink-0" />
+                    <div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">
+                        <span className="font-medium text-blue-600 dark:text-blue-400">Click to upload</span>
+                        {' '}or drag & drop
+                      </p>
+                      <p className="text-xs text-slate-400 mt-0.5">PDF, JPG, PNG, XLS up to 5MB</p>
+                    </div>
+                  </div>
+                )}
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.xls,.xlsx"
+                  className="hidden"
+                  onChange={e => handleFile(e.target.files[0])}
                 />
               </div>
-              <span className="text-xs text-gray-500">{currentStep}/{STEPS.length}</span>
-            </div>
-          )}
+            </FieldWrapper>
+
+          </div>
         </div>
-      </div>
 
-      {/* Chat messages */}
-      <div className="flex-1 overflow-y-auto py-4 space-y-3 px-1">
-        {messages.map((msg, i) =>
-          msg.role === 'bot'
-            ? <BotBubble key={i} text={msg.text} animate />
-            : <UserBubble key={i} text={msg.text} />
-        )}
-        {typing && <TypingIndicator />}
-        <div ref={bottomRef} />
-      </div>
+        {/* ── Remarks ── */}
+        <FieldWrapper label="Remarks" icon={MessageSquare}>
+          <textarea
+            value={form.remarks}
+            onChange={e => set('remarks', e.target.value)}
+            rows={3}
+            placeholder="Additional notes or comments…"
+            className="input resize-none"
+          />
+        </FieldWrapper>
 
-      {/* Input area */}
-      {!done && !typing && (
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-3 space-y-2">
-          {/* Select options */}
-          {step?.type === 'select' && step.field === 'entityId' && (
-            <div className="flex flex-wrap gap-2">
-              {entities.map(e => (
-                <button
-                  key={e.id}
-                  onClick={() => handleSelect(e.id)}
-                  className="px-3 py-1.5 text-sm rounded-full border border-primary-800 text-primary-800 dark:text-primary-300 dark:border-primary-600 hover:bg-primary-800 hover:text-white transition-colors"
-                >
-                  {e.name}
-                </button>
-              ))}
-            </div>
-          )}
+        {/* ── Action Buttons ── */}
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+          <button
+            type="button"
+            onClick={() => navigate('/payments')}
+            disabled={loading}
+            className="btn btn-secondary"
+          >
+            Cancel
+          </button>
 
-          {step?.type === 'select' && step.field === 'paymentTerms' && (
-            <div className="flex flex-wrap gap-2">
-              {step.options.map(o => (
-                <button
-                  key={o}
-                  onClick={() => handleSelect(o)}
-                  className="px-3 py-1.5 text-sm rounded-full border border-primary-800 text-primary-800 dark:text-primary-300 dark:border-primary-600 hover:bg-primary-800 hover:text-white transition-colors"
-                >
-                  {o}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* File upload */}
-          {step?.type === 'file' && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-primary-800 text-sm text-gray-500 dark:text-gray-400 hover:text-primary-800 transition-colors"
-              >
-                <Paperclip className="w-4 h-4" />
-                {file ? file.name : 'Choose file (PDF, JPG, PNG, XLS)'}
-              </button>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.xls,.xlsx"
-                className="hidden"
-                onChange={e => setFile(e.target.files[0])}
-              />
-              {file && (
-                <button
-                  onClick={() => advance(step.field, file, file.name)}
-                  className="px-4 py-2 bg-primary-800 text-white rounded-xl text-sm hover:bg-primary-700 transition-colors"
-                >
-                  Attach
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Text / number / date input */}
-          {(step?.type === 'text' || step?.type === 'number' || step?.type === 'date') && (
-            <div className="flex items-center gap-2">
-              <input
-                ref={inputRef}
-                type={step.type === 'number' ? 'number' : step.type === 'date' ? 'date' : 'text'}
-                value={inputValue}
-                onChange={e => setInputValue(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSend()}
-                placeholder={step.placeholder || ''}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-800 text-sm"
-              />
-              <button
-                onClick={handleSend}
-                disabled={!inputValue.trim() && !step.optional}
-                className="p-2.5 bg-primary-800 text-white rounded-xl hover:bg-primary-700 disabled:opacity-40 transition-colors"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-
-          {/* Skip button for optional fields */}
-          {step?.optional && step.type !== 'file' && (
-            <button onClick={skip} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-              <SkipForward className="w-3 h-3" /> Skip this
+          {!isEdit && (
+            <button
+              type="button"
+              onClick={() => handleSubmit(true)}
+              disabled={loading}
+              className="btn btn-secondary"
+            >
+              <Save className="w-4 h-4" />
+              Save as Draft
             </button>
           )}
-          {step?.type === 'file' && step.optional && !file && (
-            <button onClick={skip} className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
-              <SkipForward className="w-3 h-3" /> Skip – no attachment
-            </button>
-          )}
-        </div>
-      )}
 
-      {/* Final confirm buttons */}
-      {done && !submitting && (
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-3 flex gap-3">
           <button
-            onClick={() => submitPayment(true)}
-            className="flex-1 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            type="button"
+            onClick={() => handleSubmit(false)}
+            disabled={loading}
+            className="btn btn-primary shadow-lg shadow-blue-500/25"
           >
-            Save as Draft
-          </button>
-          <button
-            onClick={() => submitPayment(false)}
-            className="flex-1 py-2.5 rounded-xl bg-primary-800 text-white text-sm font-medium hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
-          >
-            <CheckCircle className="w-4 h-4" /> Submit for Approval
+            {loading ? (
+              <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg> Processing…</>
+            ) : (
+              <><Send className="w-4 h-4" />
+              {isEdit ? 'Update Payment' : 'Submit for Approval'}</>
+            )}
           </button>
         </div>
-      )}
 
-      {submitting && (
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-3 text-center text-sm text-gray-500 animate-pulse">
-          Processing…
-        </div>
-      )}
+      </div>
     </div>
   );
 }
